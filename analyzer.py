@@ -62,8 +62,18 @@ def generar_informe_narrativo_tic(resumen_dict, anio="2024"):
                       "(UNESCO, 2020; Castaño-Muñoz et al., 2022).")
 
     doc.add_heading("2. Resultados Clave", level=1)
+
+    # Renombrar apartados para el informe
+    nombres_amigables = {
+        "Distribución IP_III_04": "Uso de computadora",
+        "Distribución IP_III_05": "Uso de celular",
+        "Distribución IP_III_06": "Uso de internet",
+        "Infrestructura IH_II_01": "Hogar con computadora",
+        "Infrestructura IH_II_02": "Hogar con acceso a internet"
+    }
+
     for nombre, tabla in resumen_dict.items():
-        doc.add_heading(nombre.replace("_", " "), level=2)
+        doc.add_heading(nombres_amigables.get(nombre, nombre.replace("_", " ")), level=2)
         for i, row in tabla.iterrows():
             valores = " – ".join([str(v) for v in row.values])
             doc.add_paragraph(f"• {valores}", style="List Bullet")
