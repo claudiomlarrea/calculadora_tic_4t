@@ -6,9 +6,16 @@ def analizar_tic(df_hogar, df_ind):
     df = pd.merge(df_ind, df_hogar, on=["CODUSU", "NRO_HOGAR", "AGLOMERADO"], how="left")
     df["excluido_binario"] = ((df["IP_III_04"] == "No") & (df["IP_III_06"] == "No")).astype(int)
 
-    resumen = df.groupby("sexo")["excluido_binario"].mean().reset_index()
-    resumen["excluido_binario"] = (resumen["excluido_binario"] * 100).round(2)
-    resumen.columns = ["Sexo", "Porcentaje de Exclusión Digital"]
+    if "CH04" in df.columns:
+        df["sexo_label"] = df["CH04"].map({1: "Varón", 2: "Mujer"})
+        resumen = df.groupby("sexo_label")["excluido_binario"].mean().reset_index()
+        resumen["excluido_binario"] = (resumen["excluido_binario"] * 100).round(2)
+        resumen.columns = ["Sexo", "Porcentaje de Exclusión Digital"]
+    else:
+        resumen = pd.DataFrame([{
+            "Sexo": "No disponible",
+            "Porcentaje de Exclusión Digital": (df["excluido_binario"].mean() * 100).round(2)
+        }])
     return df, resumen
 
 def generar_informe_tic(df, resumen, anio):
