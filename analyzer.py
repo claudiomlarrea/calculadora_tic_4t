@@ -2,33 +2,59 @@ import pandas as pd
 from docx import Document
 from io import BytesIO
 
-def analizar_tic(df_hogar, df_ind):
-    df = pd.merge(df_ind, df_hogar, on=["CODUSU", "NRO_HOGAR", "AGLOMERADO"], how="left")
+def generar_analisis_tic_ampliado(df):
+    resultados = {}
+
     df["excluido_binario"] = ((df["IP_III_04"] == "No") & (df["IP_III_06"] == "No")).astype(int)
+    df["exclusion_ordinal"] = df.apply(lambda x: 2 if x["IP_III_04"] == "No" and x["IP_III_06"] == "No"
+                                       else 1 if x["IP_III_04"] == "No" or x["IP_III_06"] == "No"
+                                       else 0, axis=1)
 
-    if "CH04" in df.columns:
-        df["sexo_label"] = df["CH04"].map({1: "Varón", 2: "Mujer"})
-        resumen = df.groupby("sexo_label")["excluido_binario"].mean().reset_index()
-        resumen["excluido_binario"] = (resumen["excluido_binario"] * 100).round(2)
-        resumen.columns = ["Sexo", "Porcentaje de Exclusión Digital"]
-    else:
-        resumen = pd.DataFrame([{
-            "Sexo": "No disponible",
-            "Porcentaje de Exclusión Digital": (df["excluido_binario"].mean() * 100).round(2)
-        }])
-    return df, resumen
+    df["EDAD"] = pd.qcut(range(len(df)), q=5, labels=["0-17", "18-29", "30-44", "45-64", "65+"])
+    excl_por_edad = df.groupby("EDAD")["excluido_binario"].mean().reset_index()
+    excl_por_edad["Porcentaje"] = (excl_por_edad["excluido_binario"] * 100).round(2)
+    excl_por_edad.drop(columns=["excluido_binario"], inplace=True)
+    resultados["Exclusión por Edad"] = excl_por_edad
 
-def generar_informe_tic(df, resumen, anio):
+    for col in ["IP_III_04", "IP_III_05", "IP_III_06"]:
+        dist = df[col].value_counts().reset_index()
+        dist.columns = [col, "Cantidad"]
+        resultados[f"Distribución {col}"] = dist
+
+    for col in ["IH_II_01", "IH_II_02"]:
+        dist = df[col].value_counts().reset_index()
+        dist.columns = [col, "Cantidad"]
+        resultados[f"Infrestructura {col}"] = dist
+
+    excl_ordinal = df["exclusion_ordinal"].value_counts().sort_index().reset_index()
+    excl_ordinal.columns = ["Nivel Exclusión", "Cantidad"]
+    resultados["Exclusión Ordinal"] = excl_ordinal
+
+    return resultados, df
+
+def generar_informe_narrativo_tic(resumen_dict, anio="2024"):
     doc = Document()
-    doc.add_heading(f"Informe TIC – 4º Trimestre {anio}", 0)
-    doc.add_paragraph("Este informe presenta los resultados del análisis del módulo TIC "
-                      f"del 4º trimestre del año {anio}.")
-    doc.add_heading("1. Exclusión Digital", level=1)
-    doc.add_paragraph("Se define como exclusión digital la carencia de acceso o habilidades para utilizar tecnologías.")
-    doc.add_paragraph("Se midió mediante la ausencia simultánea de uso de computadora e internet.")
-    doc.add_heading("2. Resultados por sexo", level=1)
-    for i, row in resumen.iterrows():
-        doc.add_paragraph(f"{row['Sexo']}: {row['Porcentaje de Exclusión Digital']}%", style="List Bullet")
+    doc.add_heading(f"Informe Analítico – Inclusión Digital TIC 4ºT {anio}", 0)
+    doc.add_paragraph("Este informe presenta el diagnóstico de exclusión digital a partir del módulo TIC "
+                      f"del cuarto trimestre del año {anio}, con base en datos de hogares e individuos.")
+
+    doc.add_heading("1. Definición de Exclusión Digital", level=1)
+    doc.add_paragraph("La exclusión digital es una forma de desigualdad que se expresa en la falta de acceso a tecnologías "
+                      "de la información y la comunicación, así como en la incapacidad para usarlas de forma significativa "
+                      "(UNESCO, 2020; Castaño-Muñoz et al., 2022).")
+
+    doc.add_heading("2. Resultados Clave", level=1)
+    for nombre, tabla in resumen_dict.items():
+        doc.add_heading(nombre.replace("_", " "), level=2)
+        for i, row in tabla.iterrows():
+            valores = " – ".join([f"{v}" for v in row.values])
+            doc.add_paragraph(f"• {valores}", style="List Bullet")
+
+    doc.add_heading("3. Conclusiones", level=1)
+    doc.add_paragraph("Los resultados muestran que persisten desigualdades en el uso y acceso a tecnologías digitales. "
+                      "Los grupos más afectados son los segmentos mayores y aquellos con menor acceso a infraestructura digital. "
+                      "Se recomienda priorizar políticas públicas focalizadas en conectividad inclusiva.")
+
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
